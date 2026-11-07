@@ -1,0 +1,7 @@
+# shortcut: lower bounds only, no exact pins; run `pip freeze` once the team has one working env and pin from that.
+numpy
+pandas
+matplotlib>=3.5  # notebooks call ax.set_xticks(ticks, labels)
+scikit-learn
+torch  # Windows + NVIDIA: plain `pip install torch` is CPU-only, use the CUDA command from pytorch.org/get-started/locally
+jupyter
