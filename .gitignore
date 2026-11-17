@@ -14,8 +14,7 @@ processed/
 LSTM/models/
 LSTM/results/
 
-# RealWorld HAR raw data (download separately, too large for git)
-Real world HAR/
+# Zip archives (raw data is committed unzipped)
 *.zip
 *.dat
 *.pyc

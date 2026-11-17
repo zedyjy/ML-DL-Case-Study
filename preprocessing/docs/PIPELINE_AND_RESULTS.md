@@ -399,7 +399,7 @@ carefully, which at the thigh looks like slow walking.
 ## 7. Reproducing everything
 
 The raw data (`harth/`, `har70plus/`, `Real world HAR/`) is expected at the
-repo root. `Real world HAR/` is not in git; download it separately.
+repo root; all three are in git (RealWorld: accelerometer thigh + waist only).
 
 ```bash
 # from the repo root
