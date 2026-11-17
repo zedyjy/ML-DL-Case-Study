@@ -12,28 +12,29 @@ from pathlib import Path
 # Folders
 # ---------------------------------------------------------------------------
 # `Path(__file__)` is the path of this config.py file. Its parent is `src/`,
-# and the parent of that is the `LSTM/` folder. Building paths this way means
-# no folder name on anyone's computer ever has to appear in the code.
+# and the parent of that is the `preprocessing/` folder. Building paths this
+# way means no folder name on anyone's computer ever has to appear in the code.
 #
-# Repo layout (the raw data is shared by every model, so it sits at the
-# repo root, one level above `LSTM/`):
+# Repo layout (the raw data and the preprocessed windows are shared by every
+# model; each model has its own folder next to `preprocessing/`):
 #   ML-DL-Case-Study/
-#   ├── harth/  har70plus/  Real world HAR/   <- DATA_DIR
-#   └── LSTM/                                 <- LSTM_DIR
-#       ├── src/        (this file)
-#       └── processed/  (generated, not in git)
-LSTM_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = LSTM_DIR.parent
+#   ├── harth/  har70plus/  Real world HAR/   <- DATA_DIR (raw data)
+#   ├── preprocessing/                        <- PREPROCESSING_DIR
+#   │   ├── src/        (this file, steps 01-05, evaluate.py)
+#   │   └── processed/  (generated, not in git: windows.npz, folds, scalers)
+#   └── LSTM/  (CNN/, RF/, ...)               <- one folder per model
+PREPROCESSING_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = PREPROCESSING_DIR.parent
 
 # Raw data: read-only. Never write into these folders.
 HARTH_DIR = DATA_DIR / "harth"
 HAR70_DIR = DATA_DIR / "har70plus"
 REALWORLD_DIR = DATA_DIR / "Real world HAR"
 
-# Everything we generate goes here (Parquet tables, .npz window files,
-# scalers, trained models, plots). Kept inside LSTM/ so it never mixes
-# with other team members' outputs.
-PROCESSED_DIR = LSTM_DIR / "processed"
+# Everything steps 01-05 generate goes here (Parquet tables, windows.npz,
+# folds.csv, scalers.json, check plots). Every model reads its input from
+# here, so all models train and test on exactly the same windows.
+PROCESSED_DIR = PREPROCESSING_DIR / "processed"
 PLOTS_DIR = PROCESSED_DIR / "plots"
 
 # ---------------------------------------------------------------------------
@@ -68,41 +69,6 @@ GAP_THRESHOLD_S = 0.1
 N_FOLDS = 5
 SPLIT_SEED = 42      # fixed so the folds are identical for every team member
 TEST_FOLD = -1       # fold value that marks HAR70+ windows
-
-# ---------------------------------------------------------------------------
-# LSTM training (step 6)
-# ---------------------------------------------------------------------------
-# Which datasets the model learns from. ["harth"] alone answers decision 5
-# (does RealWorld help?); HAR70+ is never allowed here.
-TRAIN_DATASETS = ["harth", "realworld"]
-
-# Share of the *training subjects* of a fold that are set aside for early
-# stopping (chosen by subject, not by window). The held-out fold itself is
-# never used for any decision during training.
-VAL_SUBJECT_FRACTION = 0.15
-
-# Model size. hidden 64 x 2 layers is small (~55k weights): fast on a laptop
-# and hard to overfit with 120k windows.
-LSTM_HIDDEN = 64
-LSTM_LAYERS = 2
-LSTM_DROPOUT = 0.3
-
-# Optimisation
-BATCH_SIZE = 256
-MAX_EPOCHS = 30
-LEARNING_RATE = 1e-3
-EARLY_STOP_PATIENCE = 5      # stop when val macro-F1 has not improved for 5 epochs
-
-# Augmentation: rotate each window by a random angle about the x (vertical)
-# axis, separately for back and thigh (decision 2). Makes the model ignore
-# how the sensor was turned around the body axis.
-AUGMENT_ROTATION = True
-
-# Random seed for weights init, shuffling and the validation subject pick.
-TRAIN_SEED = 0
-
-MODELS_DIR = PROCESSED_DIR / "models"
-RESULTS_DIR = PROCESSED_DIR / "results"
 
 # ---------------------------------------------------------------------------
 # Column names of the harmonized tables (section 4 of CLAUDE.md)

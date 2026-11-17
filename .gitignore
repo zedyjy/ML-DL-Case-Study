@@ -7,8 +7,12 @@ __pycache__/
 # Virtual environment
 .venv/
 
-# Generated data (rebuild with the scripts in LSTM/src/)
+# Generated data (rebuild with the scripts in preprocessing/src/)
 processed/
+
+# Trained LSTM weights and results (rebuild with LSTM/06_train_lstm.py)
+LSTM/models/
+LSTM/results/
 
 # RealWorld HAR raw data (download separately, too large for git)
 Real world HAR/

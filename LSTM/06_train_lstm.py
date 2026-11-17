@@ -1,8 +1,10 @@
 # %% [markdown]
 # # Step 6: LSTM in PyTorch - train on younger adults, test on HAR70+
 #
-# Input : `processed/windows.npz`, `processed/scalers.json`
-# Output: `processed/results/lstm_*.json|csv|png`, `processed/models/lstm_*.pt`
+# Input : `preprocessing/processed/windows.npz`, `.../scalers.json` (made by steps 01-05)
+# Output: `LSTM/results/lstm_*.json|csv|png`, `LSTM/models/lstm_*.pt`
+# Settings: shared data/split settings in `preprocessing/src/config.py`,
+#           LSTM-only settings in `LSTM/lstm_config.py`.
 #
 # What happens here, in order:
 #  1. Load the windows. Keep only the training datasets (HARTH + RealWorld)
@@ -38,8 +40,13 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
+# Shared code (config.py, evaluate.py) lives in preprocessing/src/, next to
+# this folder. Adding it to the import path lets us `import config` from here.
+REPO_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_DIR / "preprocessing" / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import config
+import config         # shared: paths, classes, folds (same for every model)
+import lstm_config    # this model only: size, epochs, learning rate, ...
 from evaluate import score, print_report, plot_confusion
 
 # Apple-silicon GPU ("mps") if available, otherwise CPU.
@@ -47,12 +54,12 @@ DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 print("Training on", DEVICE)
 
 # Reproducibility: same seed -> same weight init, same shuffling.
-torch.manual_seed(config.TRAIN_SEED)
-np.random.seed(config.TRAIN_SEED)
+torch.manual_seed(lstm_config.TRAIN_SEED)
+np.random.seed(lstm_config.TRAIN_SEED)
 
 N_CLASSES = len(config.CLASSES)
-config.MODELS_DIR.mkdir(parents=True, exist_ok=True)
-config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+lstm_config.MODELS_DIR.mkdir(parents=True, exist_ok=True)
+lstm_config.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # %% [markdown]
 # ## 1. Load windows
@@ -65,8 +72,8 @@ with open(config.PROCESSED_DIR / "scalers.json") as fh:
     scalers = json.load(fh)
 
 is_test = dataset_all == "har70plus"
-is_pool = np.isin(dataset_all, config.TRAIN_DATASETS)   # everything we may learn from
-print(f"Windows: {is_pool.sum():,} training pool ({config.TRAIN_DATASETS}), "
+is_pool = np.isin(dataset_all, lstm_config.TRAIN_DATASETS)   # everything we may learn from
+print(f"Windows: {is_pool.sum():,} training pool ({lstm_config.TRAIN_DATASETS}), "
       f"{is_test.sum():,} HAR70+ test")
 
 
@@ -75,8 +82,8 @@ print(f"Windows: {is_pool.sum():,} training pool ({config.TRAIN_DATASETS}), "
 
 # %%
 class LSTMClassifier(nn.Module):
-    def __init__(self, n_channels=6, hidden=config.LSTM_HIDDEN,
-                 layers=config.LSTM_LAYERS, dropout=config.LSTM_DROPOUT, n_classes=N_CLASSES):
+    def __init__(self, n_channels=6, hidden=lstm_config.LSTM_HIDDEN,
+                 layers=lstm_config.LSTM_LAYERS, dropout=lstm_config.LSTM_DROPOUT, n_classes=N_CLASSES):
         super().__init__()
         # batch_first=True means the input is (batch, time, channels), which
         # is exactly the (N, 128, 6) layout of our windows.
@@ -138,7 +145,7 @@ def scale(x, scaler_name):
 def make_loader(idx, shuffle):
     """Batches of (window, label) for the given row indices."""
     ds = torch.utils.data.TensorDataset(torch.from_numpy(X_all[idx]), torch.from_numpy(y_all[idx]))
-    return torch.utils.data.DataLoader(ds, batch_size=config.BATCH_SIZE, shuffle=shuffle)
+    return torch.utils.data.DataLoader(ds, batch_size=lstm_config.BATCH_SIZE, shuffle=shuffle)
 
 
 @torch.no_grad()
@@ -165,18 +172,18 @@ def class_weights(y):
 
 def run_training(train_idx, val_idx, scaler_name, tag):
     model = LSTMClassifier().to(DEVICE)
-    optimiser = torch.optim.Adam(model.parameters(), lr=config.LEARNING_RATE)
+    optimiser = torch.optim.Adam(model.parameters(), lr=lstm_config.LEARNING_RATE)
     loss_fn = nn.CrossEntropyLoss(weight=class_weights(y_all[train_idx]))
     train_loader = make_loader(train_idx, shuffle=True)
 
     best_f1, best_state, epochs_without_gain = -1.0, None, 0
     history = []
-    for epoch in range(1, config.MAX_EPOCHS + 1):
+    for epoch in range(1, lstm_config.MAX_EPOCHS + 1):
         model.train()
         t0, total_loss = time.time(), 0.0
         for xb, yb in train_loader:
             xb, yb = xb.to(DEVICE), yb.to(DEVICE)
-            if config.AUGMENT_ROTATION:
+            if lstm_config.AUGMENT_ROTATION:
                 xb = rotate_about_x(xb)
             xb = scale(xb, scaler_name)
 
@@ -196,19 +203,19 @@ def run_training(train_idx, val_idx, scaler_name, tag):
             best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
         else:
             epochs_without_gain += 1
-            if epochs_without_gain >= config.EARLY_STOP_PATIENCE:
-                print(f"  [{tag}] early stop: no improvement for {config.EARLY_STOP_PATIENCE} epochs")
+            if epochs_without_gain >= lstm_config.EARLY_STOP_PATIENCE:
+                print(f"  [{tag}] early stop: no improvement for {lstm_config.EARLY_STOP_PATIENCE} epochs")
                 break
 
     model.load_state_dict(best_state)
-    pd.DataFrame(history).to_csv(config.RESULTS_DIR / f"lstm_{tag}_history.csv", index=False)
+    pd.DataFrame(history).to_csv(lstm_config.RESULTS_DIR / f"lstm_{tag}_history.csv", index=False)
     return model
 
 
 def split_off_validation(pool_idx, rng):
     """Pick VAL_SUBJECT_FRACTION of the *subjects* in pool_idx for validation."""
     subjects = np.unique(subject_all[pool_idx])
-    n_val = max(2, int(round(len(subjects) * config.VAL_SUBJECT_FRACTION)))
+    n_val = max(2, int(round(len(subjects) * lstm_config.VAL_SUBJECT_FRACTION)))
     val_subjects = rng.choice(subjects, size=n_val, replace=False)
     is_val = np.isin(subject_all[pool_idx], val_subjects)
     return pool_idx[~is_val], pool_idx[is_val], sorted(map(str, val_subjects))
@@ -222,7 +229,7 @@ def split_off_validation(pool_idx, rng):
 # is then scored on fold k (younger adults it never saw) and on HAR70+.
 
 # %%
-rng = np.random.default_rng(config.TRAIN_SEED)
+rng = np.random.default_rng(lstm_config.TRAIN_SEED)
 test_idx = np.where(is_test)[0]
 fold_results = []
 for k in range(config.N_FOLDS):
@@ -238,7 +245,7 @@ for k in range(config.N_FOLDS):
     print_report(res_heldout, f"fold {k}: held-out younger adults")
     print_report(res_har70, f"fold {k}: HAR70+ (zero-shot)")
     fold_results.append({"fold": k, "heldout": res_heldout, "har70plus": res_har70})
-    torch.save(model.state_dict(), config.MODELS_DIR / f"lstm_fold{k}.pt")
+    torch.save(model.state_dict(), lstm_config.MODELS_DIR / f"lstm_fold{k}.pt")
 
 # %%
 summary = pd.DataFrame({
@@ -271,21 +278,21 @@ print(f"\n--- final: train {len(train_idx):,} windows, val {len(val_idx):,} (sub
 final_model = run_training(train_idx, val_idx, "all", tag="final")
 res_final = score(y_all[test_idx], predict(final_model, test_idx, "all"))
 print_report(res_final, "FINAL model: HAR70+ (zero-shot)")
-torch.save(final_model.state_dict(), config.MODELS_DIR / "lstm_final.pt")
+torch.save(final_model.state_dict(), lstm_config.MODELS_DIR / "lstm_final.pt")
 
 # %% [markdown]
 # ## 7. Save everything
 
 # %%
-run_name = "lstm_" + "+".join(config.TRAIN_DATASETS) + ("_rot" if config.AUGMENT_ROTATION else "_norot")
-summary.to_csv(config.RESULTS_DIR / f"{run_name}_cv.csv", index=False)
-with open(config.RESULTS_DIR / f"{run_name}.json", "w") as fh:
+run_name = "lstm_" + "+".join(lstm_config.TRAIN_DATASETS) + ("_rot" if lstm_config.AUGMENT_ROTATION else "_norot")
+summary.to_csv(lstm_config.RESULTS_DIR / f"{run_name}_cv.csv", index=False)
+with open(lstm_config.RESULTS_DIR / f"{run_name}.json", "w") as fh:
     json.dump({"config": {k: getattr(config, k) for k in
                           ["TRAIN_DATASETS", "WINDOW_SIZE", "N_FOLDS", "LSTM_HIDDEN", "LSTM_LAYERS",
                            "LSTM_DROPOUT", "BATCH_SIZE", "MAX_EPOCHS", "LEARNING_RATE", "AUGMENT_ROTATION"]},
                "folds": fold_results, "final_har70plus": res_final}, fh, indent=2)
-plot_confusion(res_final, f"{run_name}: HAR70+ (final model)", config.RESULTS_DIR / f"{run_name}_cm_har70.png")
+plot_confusion(res_final, f"{run_name}: HAR70+ (final model)", lstm_config.RESULTS_DIR / f"{run_name}_cm_har70.png")
 # pooled confusion over the 5 held-out folds (every training subject once)
 pooled = {"confusion": np.sum([r["heldout"]["confusion"] for r in fold_results], axis=0).tolist()}
-plot_confusion(pooled, f"{run_name}: held-out younger adults (5 folds)", config.RESULTS_DIR / f"{run_name}_cm_heldout.png")
-print(f"\nSaved results to {config.RESULTS_DIR}/{run_name}*")
+plot_confusion(pooled, f"{run_name}: held-out younger adults (5 folds)", lstm_config.RESULTS_DIR / f"{run_name}_cm_heldout.png")
+print(f"\nSaved results to {lstm_config.RESULTS_DIR}/{run_name}*")

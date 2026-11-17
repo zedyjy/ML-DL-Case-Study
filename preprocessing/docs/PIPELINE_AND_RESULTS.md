@@ -10,8 +10,10 @@ is that everyone in the group can (a) understand the numbers, and (b) run the
 CNN, Random Forest, SelfPAB and MonoSelfPAB on **exactly the same windows,
 folds and metric**, so that the five models are comparable.
 
-All code is in `src/` (plain Python with `# %%` cell markers). Every number
-below is printed by the scripts themselves.
+Shared preprocessing (steps 1–5, `config.py`, `evaluate.py`) is in
+`preprocessing/src/`; the LSTM (step 6) is in `LSTM/`. Plain Python with
+`# %%` cell markers. Every number below is printed by the scripts themselves.
+Unless a path starts with `LSTM/`, it is relative to `preprocessing/`.
 
 ---
 
@@ -189,7 +191,7 @@ noisy, so we report macro-F1 **and** the confusion matrix, not accuracy.
 * Output: `processed/windows.npz` (510 MB) with arrays `X (N,128,6) float32`,
   `y (N,) int8`, `purity`, `subject`, `dataset`, `segment`, `fold`, `classes`.
 
-### Step 6 — LSTM (`src/06_train_lstm.py`) — see section 5.
+### Step 6 — LSTM (`LSTM/06_train_lstm.py`, settings in `LSTM/lstm_config.py`) — see section 5.
 
 ---
 
@@ -267,14 +269,17 @@ same loop; it just has no early stopping.
 ### 3.5 How to load everything (copy-paste)
 
 ```python
+# Works from any model folder next to preprocessing/ (e.g. CNN/my_model.py)
 import numpy as np, json, sys
-sys.path.insert(0, "src")
+from pathlib import Path
+PRE = Path(__file__).resolve().parent.parent / "preprocessing"
+sys.path.insert(0, str(PRE / "src"))
 import config
 from evaluate import score, print_report, plot_confusion
 
-d = np.load("processed/windows.npz", allow_pickle=False)
+d = np.load(config.PROCESSED_DIR / "windows.npz", allow_pickle=False)
 X, y, fold, dataset = d["X"], d["y"], d["fold"], d["dataset"]   # X: (N, 128, 6) in g
-scalers = json.load(open("processed/scalers.json"))
+scalers = json.load(open(config.PROCESSED_DIR / "scalers.json"))
 
 is_test = dataset == "har70plus"                                   # fold == -1
 for k in range(config.N_FOLDS):
@@ -325,7 +330,7 @@ False` would quantify it; I have not run it.
 
 ## 5. The LSTM baseline
 
-**Model** (`LSTMClassifier` in `src/06_train_lstm.py`, PyTorch):
+**Model** (`LSTMClassifier` in `LSTM/06_train_lstm.py`, PyTorch):
 `nn.LSTM(6 → 64 hidden, 2 layers, dropout 0.3, batch_first)` reads the 128
 time steps; the hidden state after the last step (64 numbers = summary of the
 2.56 s) goes through dropout and a linear layer to 6 class scores. ≈ 55 k
@@ -339,7 +344,7 @@ raw g → rotate → standardise with the fold's scaler → model. Seed 0.
 ≈ 18 s per epoch on an Apple-silicon GPU; the full run (5 folds + final)
 took ≈ 35 min.
 
-**Results** (run `lstm_harth+realworld_rot`, `processed/results/`):
+**Results** (run `lstm_harth+realworld_rot`, `LSTM/results/`):
 
 | fold | held-out younger adults | HAR70+ | gap |
 |---|---|---|---|
@@ -393,25 +398,24 @@ carefully, which at the thigh looks like slow walking.
 
 ## 7. Reproducing everything
 
-Paths in this document (`src/`, `processed/`) are relative to the `LSTM/`
-folder. The raw data (`harth/`, `har70plus/`, `Real world HAR/`) is expected
-at the repo root, one level above `LSTM/`. `Real world HAR/` is not in git;
-download it separately.
+The raw data (`harth/`, `har70plus/`, `Real world HAR/`) is expected at the
+repo root. `Real world HAR/` is not in git; download it separately.
 
 ```bash
 # from the repo root
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt          # numpy, pandas, pyarrow, scipy, scikit-learn, matplotlib, torch
-cd LSTM
-python src/01_load_harth.py              # ~1 min
-python src/02_load_har70.py
-python src/03_load_realworld.py          # ~2 min
-python src/04_labels.py
-python src/05_windows.py                 # writes windows.npz (510 MB), folds.csv, scalers.json
-python src/06_train_lstm.py              # ~35 min on Apple GPU; results in processed/results/
+pip install -r requirements.txt                  # numpy, pandas, pyarrow, scipy, scikit-learn, matplotlib, torch
+python preprocessing/src/01_load_harth.py        # ~1 min
+python preprocessing/src/02_load_har70.py
+python preprocessing/src/03_load_realworld.py    # ~2 min
+python preprocessing/src/04_labels.py
+python preprocessing/src/05_windows.py           # writes windows.npz (510 MB), folds.csv, scalers.json
+python LSTM/06_train_lstm.py                     # ~35 min on Apple GPU; results in LSTM/results/
 ```
 
-Every script prints its sanity checks (row counts, label counts, segment
-statistics) and writes a plot to `processed/plots/`. All settings (window
-length, overlap, folds, seed, model size, augmentation, which datasets to
-train on) are in `src/config.py`.
+Scripts can be started from any folder (paths come from `config.py`). Every
+script prints its sanity checks (row counts, label counts, segment
+statistics) and writes a plot to `preprocessing/processed/plots/`. Data,
+window and split settings (window length, overlap, folds, seed) are in
+`preprocessing/src/config.py`; LSTM settings (model size, epochs,
+augmentation, which datasets to train on) are in `LSTM/lstm_config.py`.
