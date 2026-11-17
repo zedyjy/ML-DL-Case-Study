@@ -3,3 +3,15 @@
 __pycache__/
 .ipynb_checkpoints/
 .DS_Store
+
+# Virtual environment
+.venv/
+
+# Generated data (rebuild with the scripts in LSTM/src/)
+processed/
+
+# RealWorld HAR raw data (download separately, too large for git)
+Real world HAR/
+*.zip
+*.dat
+*.pyc
