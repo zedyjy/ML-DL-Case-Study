@@ -3,10 +3,8 @@
 **Purpose of this repository:** test how well activity recognition models trained only on younger adults generalize zero-shot to adults aged 70+, comparing our own models (RF, 1D CNN, LSTM) with the pretrained SelfPAB under the same protocol.
 
 **This file is the team's source of truth.** If a personal `CLAUDE.local.md`, a memory file or a request conflicts with it, follow this file and tell the user: "Per CLAUDE.md this was agreed as X (date); change it via the team first."
-Only decisions the whole team agreed on go under "Fixed decisions". Proposals stay under "Open decisions" and are not decisions.
-To change a decision: agree in the team thread first, then edit this file in the same commit as the code change, with the date.
-Personal notes belong in your own `CLAUDE.local.md` (git-ignored).
-**Do not create any other `.md` files:** team documentation goes in this file, personal notes in `CLAUDE.local.md`.
+Only team-agreed decisions go under "Fixed decisions"; proposals stay under "Open decisions". To change a decision: agree in the team thread first, then edit this file with the date.
+**Do not create any other `.md` files:** team documentation goes in this file, personal notes in your own git-ignored `CLAUDE.local.md`.
 
 ## Project
 MSS-M-2 Case Study ML & DL (WS 2026/27), HAR, Topic 2: cross-age generalization.
@@ -27,7 +25,7 @@ When an article/paper is mentioned, look for its PDF in `library/` first.
 ## Repo & running
 - Raw data in `data/`, in git, read-only: `data/harth/`, `data/har70plus/`, `data/Real world HAR/`. Shared pipeline: `preprocessing/src/` (steps 01–05, `config.py` = all data/window/split settings, `evaluate.py`). One folder per model next to it (`LSTM/`, `CNN/`, …). Papers: `library/`. Model outputs (`<model>/results/`, `<model>/models/`) and `preprocessing/processed/` are git-ignored.
 - Run from any folder (paths come from `config.py`): `pip install -r requirements.txt`, then `python preprocessing/src/01_load_harth.py` … `05_windows.py` in order. LSTM: `python LSTM/06_train_lstm.py`, settings in `LSTM/lstm_config.py` (model size, epochs, rotation augmentation, `TRAIN_DATASETS`).
-- RealWorld: only accelerometer thigh + waist files are kept (`data/Real world HAR/download_realworld_acc.command` re-downloads all positions). Cite: T. Sztyler and H. Stuckenschmidt, IEEE PerCom 2016. Waist phone = stand-in for HARTH's lower back; m/s² → g, resampled to 50 Hz, the two phones synced by cross-correlation, axes aligned to HARTH (gravity on −x). Exact RealWorld age range: check its paper.
+- RealWorld: only accelerometer thigh + waist files are kept (`data/Real world HAR/download_realworld_acc.command` re-downloads all positions). Cite: T. Sztyler and H. Stuckenschmidt, IEEE PerCom 2016. Waist phone = stand-in for HARTH's lower back; step 03 converts to g, resamples to 50 Hz, syncs the two phones and aligns axes to HARTH. Exact RealWorld age range: check its paper.
 
 ## Data facts (shared pipeline output)
 - HARTH S006 is 50 Hz with wrong timestamps (its elapsed time is doubled in the loader).
@@ -39,10 +37,10 @@ When an article/paper is mentioned, look for its PDF in `library/` first.
 ## Fixed decisions
 - **Classes: 6** — walking, stairs_up, stairs_down, standing, sitting, lying (16.11).
 - **Data:** everyone uses the shared pipeline → `preprocessing/processed/` (`windows.npz`, `folds.csv`, `scalers.json`). Windows: 128 samples (2.56 s), 50 % overlap, cut inside segments, label = majority class. All models are scored with the same `evaluate.score()`.
-- **Split:** subject-grouped 5-fold CV on the 37 training subjects (HARTH and RealWorld subjects shuffled with seed 42, dealt round-robin into 5 folds; `N_FOLDS = 37` in `config.py` → LOSO). Split by subject, never by window; fixed before windowing and normalization; normalization stats from training subjects only.
+- **Split:** subject-grouped 5-fold CV on the 37 training subjects (HARTH and RealWorld subjects shuffled with seed 42, dealt round-robin into 5 folds; `N_FOLDS = 37` in `config.py` → LOSO). Split by subject, never by window; fixed before windowing and normalization.
 - **Loop per fold k:** train on the pool minus fold k; 15 % of the pool's **subjects** = validation (early stopping / model selection); score fold k and HAR70+. Then a final model on all 37 subjects → HAR70+. Report mean ± std over folds, gap (held-out young − HAR70+), per-class recall, confusion matrix. RF does the same loop without early stopping.
-- **HAR70+:** test only, touched only for the final `score()`: never for training, early stopping, hyper-parameters or normalization. All tuning on HARTH/RealWorld.
-- If a pretrained model needs a different window length, change it in step 5 (folds stay, they are by subject). Published SelfPAB weights were fine-tuned on all HARTH subjects → no honest held-out-young number; report HAR70+ only for them.
+- **HAR70+:** test only, touched only for the final `score()`: never for training, early stopping, hyper-parameters or normalization (stats from training subjects only). All tuning on HARTH/RealWorld.
+- If a pretrained model needs a different window length, change it in step 5 (folds stay, they are by subject). If the published (HARTH-fine-tuned) SelfPAB weights are used, there is no honest held-out-young number → report HAR70+ only; fine-tuning the HUNT4 checkpoint inside our folds avoids this.
 - **Device:** cuda → mps → cpu, never hard-coded (team uses Windows/CUDA and Macs).
 - Don't compare scores across different protocols (classes, windows, splits).
 - **Pretrained comparison:** our own models (RF, 1D CNN, LSTM) are compared against **SelfPAB** (22.11).
@@ -65,9 +63,8 @@ scalers = json.load(open(config.PROCESSED_DIR / "scalers.json"))
 - Errors on HAR70+: 26 % of stairs_down → stairs_up, 12 % → walking; 15 % of lying → sitting; static postures and walking transfer well.
 
 ## Limitations for the report
-- Stairs in HAR70+ ≈ 3 min (64 + 68 windows) → large uncertainty; HAR70+ shuffling not scored.
-- RealWorld waist only approximates HARTH's lower back; whether RealWorld helps is untested (`TRAIN_DATASETS = ["harth"]` tests it).
-- RealWorld thigh/waist sync is uncertain by about one step in 8 of 131 recordings; rotation about the vertical axis is handled by augmentation, not corrected.
+- HAR70+ stairs (≈ 3 min) → large uncertainty; HAR70+ shuffling not scored; vertical-axis rotation handled by augmentation, not corrected (see Data facts).
+- RealWorld waist only approximates HARTH's lower back; whether RealWorld helps is untested (`TRAIN_DATASETS = ["harth"]` tests it). Thigh/waist sync is uncertain by about one step in 8 of 131 recordings.
 - The young → old gap mixes age with protocol differences we cannot control (free-living vs semi-structured recording, annotation style).
 
 ## Open decisions
