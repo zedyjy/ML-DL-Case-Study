@@ -5,6 +5,7 @@
 **This file is the team's source of truth.** If a personal `CLAUDE.local.md`, a memory file or a request conflicts with it, follow this file and tell the user: "Per CLAUDE.md this was agreed as X (date); change it via the team first."
 Only team-agreed decisions go under "Fixed decisions"; proposals stay under "Open decisions". To change a decision: agree in the team thread first, then edit this file with the date.
 **Do not create any other `.md` files:** team documentation goes in this file, personal notes in your own git-ignored `CLAUDE.local.md`.
+**LAW: add nothing to this file unless it is truly necessary; keep it as few lines as possible.**
 
 ## Project
 MSS-M-2 Case Study ML & DL (WS 2026/27), HAR, Topic 2: cross-age generalization.
@@ -29,13 +30,13 @@ When an article/paper is mentioned, look for its PDF in `library/` first.
 
 ## Data facts (shared pipeline output)
 - HARTH S006 is 50 Hz with wrong timestamps (its elapsed time is doubled in the loader).
-- Dropped classes: running (absent in HAR70+), shuffling (absent in RealWorld; HAR70+'s 22 min of shuffling are not scored), cycling, jumping.
-- `windows.npz`: X (N,128,6) float32 in g, **unscaled**, channels back_x, back_y, back_z, thigh_x, thigh_y, thigh_z; y int8 = index into `config.CLASSES` (never reorder); purity, subject, dataset (harth / realworld / har70plus), segment, fold (HAR70+ = −1). 123,763 training-pool + 32,724 HAR70+ windows. `folds.csv` names datasets har70 / harth / rw → don't join on that column. `scalers.json`: `"fold_k"` per fold, `"all"` for the final model.
+- Dropped classes: running (absent in HAR70+), cycling, jumping. Shuffling is kept (22.11): training data from HARTH only (≈ 85 min; RealWorld has none); HAR70+ has 22 min, scored.
+- `windows.npz`: X (N,128,6) float32 in g, **unscaled**, channels back_x, back_y, back_z, thigh_x, thigh_y, thigh_z; y int8 = index into `config.CLASSES` (never reorder); purity, subject, dataset (harth / realworld / har70plus), segment, fold (HAR70+ = −1). 123,763 training-pool + 32,724 HAR70+ windows (6-class build of 18.11; window counts change after the 7-class rebuild). `folds.csv` names datasets har70 / harth / rw → don't join on that column. `scalers.json`: `"fold_k"` per fold, `"all"` for the final model.
 - Imbalance: HARTH is 54 % sitting → use class weights. HAR70+ has only 64 stairs_up + 68 stairs_down windows → stairs numbers on HAR70+ are noisy; report macro-F1 + confusion matrix, not accuracy.
 - **Sensor orientation:** while sitting, thigh_z ≈ +1 g in 14 HARTH subjects but ≈ −1 g in 7 HARTH and all 18 HAR70+ subjects (back_z shows the same split): the thigh sensor is rotated 180° around the thigh = recording-protocol difference, not age. Handle it with random rotation about x as augmentation (as the LSTM does) or orientation-independent RF features (magnitude, x, √(y²+z²)). Rotation about the vertical axis is unknown in all datasets.
 
 ## Fixed decisions
-- **Classes: 6** — walking, stairs_up, stairs_down, standing, sitting, lying (16.11).
+- **Classes: 7** — walking, stairs_up, stairs_down, standing, sitting, lying, shuffling (22.11; was 6 classes, 16.11). `shuffling` is appended as index 6 in `config.CLASSES`, so indices 0–5 stay the same. Until `config.py` is updated and steps 04–05 are rerun, `windows.npz` is still the 6-class build.
 - **Data:** everyone uses the shared pipeline → `preprocessing/processed/` (`windows.npz`, `folds.csv`, `scalers.json`). Windows: 128 samples (2.56 s), 50 % overlap, cut inside segments, label = majority class. All models are scored with the same `evaluate.score()`.
 - **Split:** subject-grouped 5-fold CV on the 37 training subjects (HARTH and RealWorld subjects shuffled with seed 42, dealt round-robin into 5 folds; `N_FOLDS = 37` in `config.py` → LOSO). Split by subject, never by window; fixed before windowing and normalization.
 - **Loop per fold k:** train on the pool minus fold k; 15 % of the pool's **subjects** = validation (early stopping / model selection); score fold k and HAR70+. Then a final model on all 37 subjects → HAR70+. Report mean ± std over folds, gap (held-out young − HAR70+), per-class recall, confusion matrix. RF does the same loop without early stopping.
@@ -59,16 +60,15 @@ scalers = json.load(open(config.PROCESSED_DIR / "scalers.json"))
 
 ## LSTM baseline (Karthik, 17.11)
 - 2-layer LSTM (64 hidden, dropout 0.3, ~55k weights); Adam lr 1e-3, batch 256, inverse-frequency class weights (mean 1), rotation augmentation per batch (raw g → rotate → standardize), early stopping on val macro-F1 (patience 5, max 30 epochs), seed 0.
-- CV: held-out young 0.880 ± 0.034, HAR70+ 0.690 ± 0.025, gap 0.19. Final model on HAR70+: macro-F1 0.701, accuracy 0.924.
+- CV (6 classes, before the 7-class change): held-out young 0.880 ± 0.034, HAR70+ 0.690 ± 0.025, gap 0.19. Final model on HAR70+: macro-F1 0.701, accuracy 0.924.
 - Errors on HAR70+: 26 % of stairs_down → stairs_up, 12 % → walking; 15 % of lying → sitting; static postures and walking transfer well.
 
 ## Limitations for the report
-- HAR70+ stairs (≈ 3 min) → large uncertainty; HAR70+ shuffling not scored; vertical-axis rotation handled by augmentation, not corrected (see Data facts).
+- HAR70+ stairs (≈ 3 min) → large uncertainty; shuffling training data comes from HARTH only; vertical-axis rotation handled by augmentation, not corrected (see Data facts).
 - RealWorld waist only approximates HARTH's lower back; whether RealWorld helps is untested (`TRAIN_DATASETS = ["harth"]` tests it). Thigh/waist sync is uncertain by about one step in 8 of 131 recordings.
 - The young → old gap mixes age with protocol differences we cannot control (free-living vs semi-structured recording, annotation style).
 
 ## Open decisions
 - Robustness test details: which sensor (back or thigh, or both separately), and how our own models handle the missing sensor (retrain on 3 channels vs. zero-fill the missing one).
 - The ONE ablation. Candidates: rotation augmentation on/off, HARTH-only training (neither measured yet).
-- 7 classes (add shuffling; training data only from HARTH) — proposal by Erdinc, not agreed.
 - Sample-level (50 Hz) scoring for all models, for a fair comparison with SelfPAB — proposal.
