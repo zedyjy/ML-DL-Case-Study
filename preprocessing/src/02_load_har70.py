@@ -1,7 +1,7 @@
 # %% [markdown]
 # # Step 2: load HAR70+ into one clean table
 #
-# Input : `har70plus/501.csv` ... `har70plus/518.csv` (18 older adults, raw)
+# Input : `data/har70plus/501.csv` ... `data/har70plus/518.csv` (18 older adults, raw)
 # Output: `processed/har70plus.parquet`
 #
 # HAR70+ uses the same sensors, axes, units (g) and label codes as HARTH, so

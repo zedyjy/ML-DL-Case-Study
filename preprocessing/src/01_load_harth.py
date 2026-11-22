@@ -1,7 +1,7 @@
 # %% [markdown]
 # # Step 1: load HARTH into one clean table
 #
-# Input : `harth/S006.csv` ... `harth/S029.csv` (22 subjects, raw, read-only)
+# Input : `data/harth/S006.csv` ... `data/harth/S029.csv` (22 subjects, raw, read-only)
 # Output: `processed/harth.parquet`
 #
 # What this script does, in order:

@@ -25,9 +25,9 @@ When an article/paper is mentioned, look for its PDF in `library/` first.
 - Deadlines: 23.11 Task 2 SotA + methodology · 14.12 Task 3 preprocessing + working baseline · 11.01 Task 4 progress · 16.01 Task 5 code + video · 18.01 Task 6 final talk · 20.01 Task 7 IEEE report.
 
 ## Repo & running
-- Raw data at the repo root, in git, read-only: `harth/`, `har70plus/`, `Real world HAR/`. Shared pipeline: `preprocessing/src/` (steps 01–05, `config.py` = all data/window/split settings, `evaluate.py`). One folder per model next to it (`LSTM/`, `CNN/`, …). Papers: `library/`. Model outputs (`<model>/results/`, `<model>/models/`) and `preprocessing/processed/` are git-ignored.
+- Raw data in `data/`, in git, read-only: `data/harth/`, `data/har70plus/`, `data/Real world HAR/`. Shared pipeline: `preprocessing/src/` (steps 01–05, `config.py` = all data/window/split settings, `evaluate.py`). One folder per model next to it (`LSTM/`, `CNN/`, …). Papers: `library/`. Model outputs (`<model>/results/`, `<model>/models/`) and `preprocessing/processed/` are git-ignored.
 - Run from any folder (paths come from `config.py`): `pip install -r requirements.txt`, then `python preprocessing/src/01_load_harth.py` … `05_windows.py` in order. LSTM: `python LSTM/06_train_lstm.py`, settings in `LSTM/lstm_config.py` (model size, epochs, rotation augmentation, `TRAIN_DATASETS`).
-- RealWorld: only accelerometer thigh + waist files are kept (`Real world HAR/download_realworld_acc.command` re-downloads all positions). Cite: T. Sztyler and H. Stuckenschmidt, IEEE PerCom 2016. Waist phone = stand-in for HARTH's lower back; m/s² → g, resampled to 50 Hz, the two phones synced by cross-correlation, axes aligned to HARTH (gravity on −x). Exact RealWorld age range: check its paper.
+- RealWorld: only accelerometer thigh + waist files are kept (`data/Real world HAR/download_realworld_acc.command` re-downloads all positions). Cite: T. Sztyler and H. Stuckenschmidt, IEEE PerCom 2016. Waist phone = stand-in for HARTH's lower back; m/s² → g, resampled to 50 Hz, the two phones synced by cross-correlation, axes aligned to HARTH (gravity on −x). Exact RealWorld age range: check its paper.
 
 ## Data facts (shared pipeline output)
 - HARTH S006 is 50 Hz with wrong timestamps (its elapsed time is doubled in the loader).

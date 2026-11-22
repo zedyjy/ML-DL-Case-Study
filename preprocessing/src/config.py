@@ -18,13 +18,13 @@ from pathlib import Path
 # Repo layout (the raw data and the preprocessed windows are shared by every
 # model; each model has its own folder next to `preprocessing/`):
 #   ML-DL-Case-Study/
-#   ├── harth/  har70plus/  Real world HAR/   <- DATA_DIR (raw data)
+#   ├── data/   harth/  har70plus/  Real world HAR/   <- DATA_DIR (raw data)
 #   ├── preprocessing/                        <- PREPROCESSING_DIR
 #   │   ├── src/        (this file, steps 01-05, evaluate.py)
 #   │   └── processed/  (generated, not in git: windows.npz, folds, scalers)
 #   └── LSTM/  (CNN/, RF/, ...)               <- one folder per model
 PREPROCESSING_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = PREPROCESSING_DIR.parent
+DATA_DIR = PREPROCESSING_DIR.parent / "data"
 
 # Raw data: read-only. Never write into these folders.
 HARTH_DIR = DATA_DIR / "harth"

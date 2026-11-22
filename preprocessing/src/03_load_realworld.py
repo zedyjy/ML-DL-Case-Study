@@ -1,7 +1,7 @@
 # %% [markdown]
 # # Step 3: load RealWorld HAR into the common table
 #
-# Input : `Real world HAR/s01 ... s15/acc_<activity>[_<n>]_<thigh|waist>.csv`
+# Input : `data/Real world HAR/s01 ... s15/acc_<activity>[_<n>]_<thigh|waist>.csv`
 # Output: `processed/realworld.parquet`
 #
 # RealWorld is the messy one. Each recording is TWO files (thigh phone and
