@@ -18,3 +18,7 @@ LSTM/results/
 *.zip
 *.dat
 *.pyc
+
+# Personal Claude Code files (shared team rules live in CLAUDE.md)
+CLAUDE.local.md
+.claude/settings.local.json
